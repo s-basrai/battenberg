@@ -62,6 +62,7 @@
 #' @param multisample_maxlag Maximal number of upstream SNPs used in the multisample haplotyping to inform the haplotype at another SNP (Default: 100)
 #' @param multisample_relative_weight_balanced Relative weight to give to haplotype info from a sample without allelic imbalance in the region (Default: 0.25)
 #' @param enhanced_grid_search Should use multi-start, parallelized and multi-approach grid search (Default: FALSE)
+#' @param paired.end Indicates whether the aligned reads in the BAM file are paired-end or single-end (default=TRUE).
 #' @author sd11, jdemeul, Naser Ansari-Pour, Julio Cesar Cortes Rios
 #' @export
 battenberg = function(analysis="paired",
@@ -80,6 +81,7 @@ battenberg = function(analysis="paired",
                       impute_exe="impute2",
                       allelecounter_exe="alleleCounter",
                       nthreads=8,
+                      paired.end=TRUE,
                       platform_gamma=1,
                       phasing_gamma=1,
                       segmentation_gamma=10,
@@ -238,7 +240,8 @@ battenberg = function(analysis="paired",
                       min_normal_depth=min_normal_depth,
                       nthreads=nthreads,
                       skip_allele_counting=skip_allele_counting[sampleidx],
-                      skip_allele_counting_normal = (sampleidx > 1))
+                      skip_allele_counting_normal = (sampleidx > 1),
+                      paired.end=paired.end)
           
         } else if (analysis == "cell_line") {
           prepare_wgs_cell_line(chrom_names=chrom_names,

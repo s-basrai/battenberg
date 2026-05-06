@@ -8,6 +8,7 @@ option_list = list(
   make_option(c("-n", "--normalname"), type="character", default=NULL, help="Samplename of the normal", metavar="character"),
   make_option(c("--tb"), type="character", default=NULL, help="Sample BAM file", metavar="character"),
   make_option(c("--nb"), type="character", default=NULL, help="Normal BAM file", metavar="character"),
+  make_option(c("--pe"), type="logical", default=TRUE, help="Indicates whether the aligned reads in the BAM file are paired-end or not (default=TRUE)", metavar="logical"),
   make_option(c("--beagle_jar"), type="character", default=NULL, help="Full path to beagle jar", metavar="character"),
   make_option(c("--beagle_ref_template"), type="character", default=NULL, help="Full path to beagle reference template", metavar="character"),
   make_option(c("--beagle_plink_template"), type="character", default=NULL, help="Full path to beagle plink maps template", metavar="character"),
@@ -41,6 +42,7 @@ if (startsWith(opt$tb, "c(")) {
  SAMPLEBAM = opt$tb
 }
 NORMALBAM = opt$nb
+PAIRED_END = opt$pe
 BEAGLEJAR = opt$beagle_jar
 BEAGLEREF.template = opt$beagle_ref_template
 BEAGLEPLINK.template = opt$beagle_plink_template
@@ -154,7 +156,8 @@ battenberg(analysis=analysis,
 	   samplename=SAMPLENAME, 
            normalname=NORMALNAME, 
            sample_data_file=SAMPLEBAM, 
-           normal_data_file=NORMALBAM, 
+           normal_data_file=NORMALBAM,
+           paired.end=PAIRED_END, 
            ismale=IS.MALE, 
            imputeinfofile=IMPUTEINFOFILE, 
            g1000prefix=G1000PREFIX, 

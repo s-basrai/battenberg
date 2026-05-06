@@ -7,16 +7,22 @@
 #' @param min.base.qual The minimum base quality required for it to be counted (optional, default=20).
 #' @param min.map.qual The minimum mapping quality required for it to be counted (optional, default=35).
 #' @param allelecounter.exe A pointer to where the alleleCounter executable can be found (optional, default points to $PATH).
+#' @param paired.end Indicates whether the aligned reads in the BAM file are paired-end or single-end (default=TRUE).
 #' @author sd11
 #' @export
-getAlleleCounts = function(bam.file, output.file, g1000.loci, min.base.qual=20, min.map.qual=35, allelecounter.exe="alleleCounter") {
+getAlleleCounts = function(bam.file, output.file, g1000.loci, min.base.qual=20, min.map.qual=35,
+                           allelecounter.exe="alleleCounter", paired.end=TRUE) {
   cmd = paste(allelecounter.exe,
               "-b", bam.file,
               "-l", g1000.loci,
               "-o", output.file,
               "-m", min.base.qual,
               "-q", min.map.qual)
-
+  
+  if (!paired.end) {
+    cmd = paste(cmd, "-f", 0,
+                     "-F", 3844)
+  }
 
   # alleleCount >= v4.0.0 is sped up considerably on 1000G loci when run in dense-snp mode
   counter_version = system(paste(allelecounter.exe, "--version"), intern = T)
@@ -392,10 +398,12 @@ gc.correct.wgs = function(Tumour_LogR_file, outfile, correlations_outfile, gc_co
 #' @param nthreads The number of paralel processes to run
 #' @param skip_allele_counting Flag, set to TRUE if allele counting is already complete (files are expected in the working directory on disk)
 #' @param skip_allele_counting_normal Flag, set to TRUE from the second sample onwards for multisample case (Default: FALSE)
+#' @param paired.end Indicates whether the aligned reads in the BAM file are paired-end or single-end (default=TRUE).
 #' @author sd11
 #' @export
 prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname, g1000allelesprefix, g1000prefix, gccorrectprefix,
-                       repliccorrectprefix, min_base_qual, min_map_qual, allelecounter_exe, min_normal_depth, nthreads, skip_allele_counting, skip_allele_counting_normal = F) {
+                       repliccorrectprefix, min_base_qual, min_map_qual, allelecounter_exe, min_normal_depth, nthreads, skip_allele_counting,
+                       skip_allele_counting_normal = F, paired.end = TRUE) {
 
   requireNamespace("foreach")
   requireNamespace("doParallel")
@@ -409,7 +417,8 @@ prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname
                       g1000.loci=paste(g1000prefix, chrom_names[i], ".txt", sep=""),
                       min.base.qual=min_base_qual,
                       min.map.qual=min_map_qual,
-                      allelecounter.exe=allelecounter_exe)
+                      allelecounter.exe=allelecounter_exe,
+                      paired.end=paired.end)
       
       if (!skip_allele_counting_normal) {
         getAlleleCounts(bam.file=normalbam,
@@ -417,7 +426,8 @@ prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname
                         g1000.loci=paste(g1000prefix, chrom_names[i], ".txt", sep=""),
                         min.base.qual=min_base_qual,
                         min.map.qual=min_map_qual,
-                        allelecounter.exe=allelecounter_exe)
+                        allelecounter.exe=allelecounter_exe,
+                        paired.end=paired.end)
       }
     }
   }
