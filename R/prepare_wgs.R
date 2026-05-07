@@ -51,7 +51,7 @@ getAlleleCounts = function(bam.file, output.file, g1000.loci, min.base.qual=20, 
 #' @param seed A seed to be set for when randomising the alleles.
 #' @author dw9, sd11
 #' @export
-getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile.prefix, figuresFile.prefix, BAFnormalFile, BAFmutantFile, logRnormalFile, logRmutantFile, combinedAlleleCountsFile, chr_names, g1000file.prefix, minCounts=NA, samplename="sample1", seed=as.integer(Sys.time())) {
+getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile.prefix, figuresFile.prefix, BAFnormalFile, BAFmutantFile, logRnormalFile, logRmutantFile, combinedAlleleCountsFile, chr_names, g1000file.prefix, minCounts=NA, samplename="sample1", seed=as.integer(Sys.time()), logr_normalAlleleCountsFile.prefix=NULL) {
 
   set.seed(seed)
 
@@ -63,12 +63,23 @@ getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile
   allele_data[,1] = gsub("chr","",allele_data[,1])
   normal_input_data[,1] = gsub("chr","",normal_input_data[,1])
   input_data[,1] = gsub("chr","",input_data[,1])
+  
+  if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+    normal_logr_data_raw = concatenateAlleleCountFiles(logr_normalAlleleCountsFile.prefix, ".txt", chr_names)
+    normal_logr_data_raw[,1] = gsub("chr","", normal_logr_data_raw[,1])
+  }
 
   # Synchronise all the data frames
   chrpos_allele = paste(allele_data[,1], "_", allele_data[,2], sep="")
   chrpos_normal = paste(normal_input_data[,1], "_", normal_input_data[,2], sep="")
   chrpos_tumour = paste(input_data[,1], "_", input_data[,2], sep="")
-  matched_data = Reduce(intersect, list(chrpos_allele, chrpos_normal, chrpos_tumour))
+  if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+    chrpos_normal_logr = paste(normal_logr_data_raw[,1], "_", normal_logr_data_raw[,2], sep="")
+    matched_data = Reduce(intersect, list(chrpos_allele, chrpos_normal, chrpos_normal_logr, chrpos_tumour))
+    normal_logr_data_raw = normal_logr_data_raw[chrpos_normal_logr %in% matched_data,]
+  } else {
+    matched_data = Reduce(intersect, list(chrpos_allele, chrpos_normal, chrpos_tumour))
+  }
 
   allele_data = allele_data[chrpos_allele %in% matched_data,]
   normal_input_data = normal_input_data[chrpos_normal %in% matched_data,]
@@ -90,6 +101,15 @@ getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile
   mutCount2 = mutant_data[cbind(1:len,allele_data[,4])]
   totalMutant = mutCount1 + mutCount2
 
+  # Compute LogR normal depth if a separate LogR normal was provided
+  if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+    logr_normal_data = normal_logr_data_raw[,3:6]
+    logr_normCount1 = logr_normal_data[cbind(1:len,allele_data[,3])]
+    logr_normCount2 = logr_normal_data[cbind(1:len,allele_data[,4])]
+    totalNormal_logr = logr_normCount1 + logr_normCount2
+    rm(logr_normal_data, logr_normCount1, logr_normCount2, normal_logr_data_raw)
+  }
+
   # Clean up a few unused variables to save some memory
   rm(normal_data, mutant_data, allele_data, normal_input_data)
 
@@ -97,8 +117,13 @@ getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile
   indices = 1:nrow(input_data)
   if(!is.na(minCounts)){
     print(paste("minCount=", minCounts,sep=""))
-    # Only normal has to have min coverage, mutant must have at least 1 read to prevent division by zero
-    indices = which(totalNormal>=minCounts & totalMutant>=1)
+    # BAF normal must meet min coverage; mutant must have at least 1 read to prevent division by zero
+    # If a LogR normal is supplied, also require at least 1 read there to prevent divide-by-zero in LogR
+    if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+      indices = which(totalNormal>=minCounts & totalMutant>=1 & totalNormal_logr>=1)
+    } else {
+      indices = which(totalNormal>=minCounts & totalMutant>=1)
+    }
 
     totalNormal = totalNormal[indices]
     totalMutant = totalMutant[indices]
@@ -106,6 +131,9 @@ getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile
     normCount2 = normCount2[indices]
     mutCount1 = mutCount1[indices]
     mutCount2 = mutCount2[indices]
+    if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+      totalNormal_logr = totalNormal_logr[indices]
+    }
   }
   n = length(indices)
 
@@ -122,7 +150,11 @@ getBAFsAndLogRs = function(tumourAlleleCountsFile.prefix, normalAlleleCountsFile
   mutantBAF[which(selector==1)] = mutCount2[which(selector==1)] / totalMutant[which(selector==1)]
 
   normalLogR = vector(length=n, mode="integer") #assume that normallogR is 0, and normalise mutantLogR to normalLogR
-  mutantLogR = totalMutant/totalNormal
+  if (!is.null(logr_normalAlleleCountsFile.prefix)) {
+    mutantLogR = totalMutant / totalNormal_logr
+  } else {
+    mutantLogR = totalMutant / totalNormal
+  }
   rm(selector)
 
   # Create the output data.frames
@@ -401,7 +433,8 @@ gc.correct.wgs = function(Tumour_LogR_file, outfile, correlations_outfile, gc_co
 #' @param paired.end Indicates whether the aligned reads in the BAM file are paired-end or single-end (default=TRUE).
 #' @author sd11
 #' @export
-prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname, g1000allelesprefix, g1000prefix, gccorrectprefix,
+prepare_wgs = function(chrom_names, tumourbam, normalbam, normalbam_logr=NULL, tumourname, normalname, normalname_logr=NULL,
+                       g1000allelesprefix, g1000prefix, gccorrectprefix,
                        repliccorrectprefix, min_base_qual, min_map_qual, allelecounter_exe, min_normal_depth, nthreads, skip_allele_counting,
                        skip_allele_counting_normal = F, paired.end = TRUE) {
 
@@ -428,6 +461,16 @@ prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname
                         min.map.qual=min_map_qual,
                         allelecounter.exe=allelecounter_exe,
                         paired.end=paired.end)
+        
+        if (!is.null(normalbam_logr)) {
+          getAlleleCounts(bam.file=normalbam_logr,
+                          output.file=paste(normalname_logr,"_alleleFrequencies_chr", chrom_names[i], ".txt", sep=""),
+                          g1000.loci=paste(g1000prefix, chrom_names[i], ".txt", sep=""),
+                          min.base.qual=min_base_qual,
+                          min.map.qual=min_map_qual,
+                          allelecounter.exe=allelecounter_exe,
+                          paired.end=paired.end)
+        }
       }
     }
   }
@@ -435,6 +478,7 @@ prepare_wgs = function(chrom_names, tumourbam, normalbam, tumourname, normalname
   # Obtain BAF and LogR from the raw allele counts
   getBAFsAndLogRs(tumourAlleleCountsFile.prefix=paste(tumourname,"_alleleFrequencies_chr", sep=""),
                   normalAlleleCountsFile.prefix=paste(normalname,"_alleleFrequencies_chr", sep=""),
+                  logr_normalAlleleCountsFile.prefix=if (!is.null(normalname_logr)) paste(normalname_logr,"_alleleFrequencies_chr", sep="") else NULL,
                   figuresFile.prefix=paste(tumourname, "_", sep=''),
                   BAFnormalFile=paste(tumourname,"_normalBAF.tab", sep=""),
                   BAFmutantFile=paste(tumourname,"_mutantBAF.tab", sep=""),
