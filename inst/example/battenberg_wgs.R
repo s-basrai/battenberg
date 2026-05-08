@@ -44,8 +44,8 @@ if (startsWith(opt$tb, "c(")) {
  SAMPLEBAM = opt$tb
 }
 NORMALBAM = opt$nb
-NORMALBAM_LOGR = opt$nb_logr
-NORMALNAME_LOGR = opt$normalname_logr
+NORMALBAM_LOGR = if (!is.null(opt$nb_logr) && opt$nb_logr == "NA") NULL else opt$nb_logr
+NORMALNAME_LOGR = if (!is.null(opt$normalname_logr) && opt$normalname_logr == "NA") NULL else opt$normalname_logr
 PAIRED_END = opt$pe
 BEAGLEJAR = opt$beagle_jar
 BEAGLEREF.template = opt$beagle_ref_template
